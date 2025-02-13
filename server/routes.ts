@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { summaryRequestSchema } from "@shared/schema";
 import { extract } from "article-parser";
+import { generateSummary } from "./lib/openai";
 
 export function registerRoutes(app: Express): Server {
   app.post("/api/summarize", async (req, res) => {
@@ -51,11 +52,14 @@ export function registerRoutes(app: Express): Server {
         truncatedContent += '...';
       }
 
+      // Generate AI summary
+      const aiSummary = await generateSummary(truncatedContent, validatedData.instructions);
+
       const result = await storage.createSummary({
         content: cleanContent,
         url: validatedData.url,
-        instructions: validatedData.instructions,
-        summary: truncatedContent,
+        instructions: validatedData.instructions || null,
+        summary: aiSummary,
       });
 
       res.json(result);
