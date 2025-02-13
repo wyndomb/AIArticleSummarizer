@@ -144,7 +144,7 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <div className="prose max-w-none">
-                <p className="text-[#1A202C]">{summary}</p>
+                <p className="text-[#1A202C] whitespace-pre-line">{summary}</p>
               </div>
             </CardContent>
           </Card>
