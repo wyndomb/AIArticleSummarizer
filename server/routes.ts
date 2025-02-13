@@ -25,11 +25,23 @@ export function registerRoutes(app: Express): Server {
         .replace(/\s+/g, ' ')    // Replace multiple spaces with single space
         .trim();                 // Remove leading/trailing spaces
 
+      // Get approximately 1000 words (around 6000 characters)
+      const MAX_LENGTH = 6000;
+      let truncatedContent = cleanContent;
+      if (cleanContent.length > MAX_LENGTH) {
+        // Find the last complete word within the limit
+        truncatedContent = cleanContent.substr(0, MAX_LENGTH);
+        truncatedContent = truncatedContent.substr(0, Math.min(
+          truncatedContent.length,
+          truncatedContent.lastIndexOf(' ')
+        )) + '...';
+      }
+
       const result = await storage.createSummary({
         content: cleanContent,
         url: validatedData.url,
         instructions: validatedData.instructions,
-        summary: cleanContent.slice(0, 300) + "...", // Increased to 300 characters for better preview
+        summary: truncatedContent,
       });
 
       res.json(result);
