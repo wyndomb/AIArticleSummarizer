@@ -29,7 +29,7 @@ export function registerRoutes(app: Express): Server {
         content: cleanContent,
         url: validatedData.url,
         instructions: validatedData.instructions,
-        summary: cleanContent.slice(0, 100) + "...", // Temporary summary until OpenAI integration
+        summary: cleanContent.slice(0, 300) + "...", // Increased to 300 characters for better preview
       });
 
       res.json(result);
