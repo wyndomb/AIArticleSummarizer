@@ -2,17 +2,28 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { summaryRequestSchema } from "@shared/schema";
+import { extract } from "article-parser";
 
 export function registerRoutes(app: Express): Server {
   app.post("/api/summarize", async (req, res) => {
     try {
       const validatedData = summaryRequestSchema.parse(req.body);
 
+      if (!validatedData.url) {
+        throw new Error("URL is required");
+      }
+
+      // Extract article content from URL
+      const article = await extract(validatedData.url);
+      if (!article || !article.content) {
+        throw new Error("Could not extract article content from the URL");
+      }
+
       const result = await storage.createSummary({
-        content: validatedData.content,
+        content: article.content,
         url: validatedData.url,
         instructions: validatedData.instructions,
-        summary: validatedData.content.slice(0, 100) + "...", // Temporary summary until API key is set
+        summary: article.content.slice(0, 100) + "...", // Temporary summary until OpenAI integration
       });
 
       res.json(result);

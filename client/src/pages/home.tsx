@@ -7,7 +7,6 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { CopyIcon, Loader2 } from "lucide-react";
@@ -19,7 +18,6 @@ export default function Home() {
   const form = useForm<SummaryRequest>({
     resolver: zodResolver(summaryRequestSchema),
     defaultValues: {
-      content: "",
       url: "",
       instructions: "",
     },
@@ -78,28 +76,10 @@ export default function Home() {
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
                   control={form.control}
-                  name="content"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Article Content</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Paste your article content here..."
-                          className="min-h-[200px] bg-white"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="url"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Article URL (optional)</FormLabel>
+                      <FormLabel>Article URL</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="https://example.com/article"
@@ -138,7 +118,7 @@ export default function Home() {
                   {summarizeMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating Summary...
+                      Extracting and Summarizing...
                     </>
                   ) : (
                     "Generate Summary"

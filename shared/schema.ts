@@ -4,8 +4,8 @@ import { z } from "zod";
 
 export const summaries = pgTable("summaries", {
   id: serial("id").primaryKey(),
-  url: text("url"),
-  content: text("content").notNull(),
+  url: text("url").notNull(),
+  content: text("content"),
   summary: text("summary").notNull(),
   instructions: text("instructions"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -21,8 +21,8 @@ export type Summary = typeof summaries.$inferSelect;
 
 // Schema for summary request
 export const summaryRequestSchema = z.object({
-  content: z.string().min(1, "Content is required"),
-  url: z.string().url().optional(),
+  url: z.string().url("Please enter a valid URL"),
+  content: z.string().optional(),
   instructions: z.string().optional(),
 });
 
