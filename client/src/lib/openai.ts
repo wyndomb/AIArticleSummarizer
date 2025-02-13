@@ -1,9 +1,14 @@
 import OpenAI from "openai";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const openai = API_KEY ? new OpenAI({ apiKey: API_KEY }) : null;
 
 export async function generateSummary(content: string, instructions?: string): Promise<string> {
+  if (!openai) {
+    throw new Error("OpenAI API key is not configured. Please check your environment variables.");
+  }
+
   const prompt = `Please summarize the following text${instructions ? ` according to these instructions: ${instructions}` : ''}:\n\n${content}`;
 
   try {

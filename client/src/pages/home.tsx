@@ -78,14 +78,14 @@ export default function Home() {
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                 <FormField
                   control={form.control}
-                  name="url"
+                  name="content"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Article URL (optional)</FormLabel>
+                      <FormLabel>Article Content</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="https://example.com/article"
-                          className="bg-white"
+                        <Textarea
+                          placeholder="Paste your article content here..."
+                          className="min-h-[200px] bg-white"
                           {...field}
                         />
                       </FormControl>
@@ -96,14 +96,14 @@ export default function Home() {
 
                 <FormField
                   control={form.control}
-                  name="content"
+                  name="url"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Article Content</FormLabel>
+                      <FormLabel>Article URL (optional)</FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder="Paste your article content here..."
-                          className="min-h-[200px] bg-white"
+                        <Input
+                          placeholder="https://example.com/article"
+                          className="bg-white"
                           {...field}
                         />
                       </FormControl>
