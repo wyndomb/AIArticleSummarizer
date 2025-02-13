@@ -19,11 +19,17 @@ export function registerRoutes(app: Express): Server {
         throw new Error("Could not extract article content from the URL");
       }
 
+      // Create a temporary DOM element to parse HTML and get text content
+      const cleanContent = article.content
+        .replace(/<[^>]*>/g, '') // Remove HTML tags
+        .replace(/\s+/g, ' ')    // Replace multiple spaces with single space
+        .trim();                 // Remove leading/trailing spaces
+
       const result = await storage.createSummary({
-        content: article.content,
+        content: cleanContent,
         url: validatedData.url,
         instructions: validatedData.instructions,
-        summary: article.content.slice(0, 100) + "...", // Temporary summary until OpenAI integration
+        summary: cleanContent.slice(0, 100) + "...", // Temporary summary until OpenAI integration
       });
 
       res.json(result);
