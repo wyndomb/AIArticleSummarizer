@@ -8,7 +8,7 @@ export async function generateSummary(content: string, instructions?: string): P
     throw new Error("OpenAI API key is not configured. Please check your environment variables.");
   }
 
-  const prompt = `Please summarize the following text${instructions ? ` according to these instructions: ${instructions}` : ''}:\n\n${content}`;
+  const prompt = `Please summarize the following text${instructions ? ` according to these instructions: ${instructions}` : ''}:\n\n${content}\n\nProvide your response in JSON format with a 'summary' field containing the summarized text.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -16,7 +16,7 @@ export async function generateSummary(content: string, instructions?: string): P
       messages: [
         {
           role: "system",
-          content: "You are a professional article summarizer. Create clear, concise summaries while maintaining the key points and context."
+          content: "You are a professional article summarizer. Create clear, concise summaries while maintaining the key points and context. Always respond with JSON containing a 'summary' field."
         },
         { role: "user", content: prompt }
       ],
