@@ -1,14 +1,24 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import OpenAI from "openai";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export async function generateSummary(content: string, instructions?: string): Promise<string> {
+export async function generateSummary(
+  content: string,
+  instructions?: string
+): Promise<string> {
   if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OpenAI API key is not configured. Please check your environment variables.");
+    throw new Error(
+      "OpenAI API key is not configured. Please check your environment variables."
+    );
   }
 
-  const prompt = `Please summarize the following text${instructions ? ` according to these instructions: ${instructions}` : ''}:\n\n${content}\n\nFormat your response as a JSON object with a 'summary' field. The summary should:\n- Start with a concise overview paragraph\n- Use well-structured paragraphs for the main content\n- Include bullet points for key takeaways\n- Use proper spacing between paragraphs\n\nEnsure the response is valid JSON with a 'summary' field containing the formatted text with proper newlines (\\n\\n) between paragraphs and proper bullet point formatting.`;
+  const prompt = `Please summarize the following text${
+    instructions ? ` according to these instructions: ${instructions}` : ""
+  }:\n\n${content}\n\nFormat your response as a JSON object with a 'summary' field. The summary should:\n- Start with a concise overview paragraph\n- Use well-structured paragraphs for the main content\n- Include bullet points for key takeaways\n- Use proper spacing between paragraphs\n\nEnsure the response is valid JSON with a 'summary' field containing the formatted text with proper newlines (\\n\\n) between paragraphs and proper bullet point formatting.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -24,11 +34,11 @@ export async function generateSummary(content: string, instructions?: string): P
 5. Format bullet points with a dash and space (- ) at the start
 6. End with clear key takeaways in bullet point format
 
-Always respond with JSON containing a 'summary' field. Preserve all formatting in the summary field.`
+Always respond with JSON containing a 'summary' field. Preserve all formatting in the summary field.`,
         },
-        { role: "user", content: prompt }
+        { role: "user", content: prompt },
       ],
-      response_format: { type: "json_object" }
+      response_format: { type: "json_object" },
     });
 
     const content = response.choices[0].message.content;
