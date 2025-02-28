@@ -2,25 +2,44 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    try {
+      const text = await res.text();
+      console.error(`API error ${res.status}: ${text}`);
+      throw new Error(`${res.status}: ${text}`);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes(res.status.toString())
+      ) {
+        throw error;
+      }
+      throw new Error(`${res.status}: ${res.statusText}`);
+    }
   }
 }
 
 export async function apiRequest(
   method: string,
   url: string,
-  data?: unknown | undefined,
+  data?: unknown | undefined
 ): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
+  try {
+    console.log(`Making ${method} request to ${url}`, data ? { data } : "");
 
-  await throwIfResNotOk(res);
-  return res;
+    const res = await fetch(url, {
+      method,
+      headers: data ? { "Content-Type": "application/json" } : {},
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: "include",
+    });
+
+    // Don't call throwIfResNotOk here to allow the caller to handle the response
+    // This is important for the questionMutation which needs to read the response text
+    return res;
+  } catch (error) {
+    console.error("API request error:", error);
+    throw error;
+  }
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
