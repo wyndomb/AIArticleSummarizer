@@ -5,6 +5,128 @@ import { summaryRequestSchema, questionRequestSchema } from "@shared/schema";
 // @ts-ignore - Ignore the type error for article-parser
 import { extract } from "article-parser";
 import { generateSummary, answerQuestion } from "./lib/openai";
+import { extractArticle } from "./lib/articleExtractor";
+
+/**
+ * Helper function to extract and clean article content from a URL
+ */
+async function extractArticleContent(url: string): Promise<{
+  title: string;
+  cleanContent: string;
+  truncatedContent: string;
+}> {
+  // Validate URL format
+  try {
+    const urlObj = new URL(url);
+    // Normalize the URL to ensure consistent format
+    url = urlObj.toString();
+  } catch (error) {
+    throw new Error("Invalid URL format");
+  }
+
+  // First, try with article-parser
+  try {
+    console.log(`Extracting content from URL using article-parser: ${url}`);
+    const article = await extract(url);
+
+    if (article && article.content) {
+      console.log("Article extraction successful with article-parser");
+
+      // Clean the content
+      const cleanContent = cleanArticleContent(article.content);
+
+      // Truncate content to a reasonable length
+      const MAX_LENGTH = 6000;
+      let truncatedContent = cleanContent;
+      if (cleanContent.length > MAX_LENGTH) {
+        truncatedContent = truncateContent(cleanContent, MAX_LENGTH);
+      }
+
+      const articleTitle = article.title || "Unknown Title";
+
+      return {
+        title: articleTitle,
+        cleanContent,
+        truncatedContent,
+      };
+    }
+
+    // If we get here, article-parser didn't extract content properly
+    console.log(
+      "Article-parser couldn't extract content properly, trying fallback extractor"
+    );
+  } catch (error) {
+    console.error("Error with article-parser extraction:", error);
+    console.log("Falling back to custom article extractor");
+  }
+
+  // Fallback to our custom extractor
+  try {
+    console.log(`Extracting content from URL using fallback extractor: ${url}`);
+    const article = await extractArticle(url);
+
+    console.log("Article extraction successful with fallback extractor");
+
+    // Content is already cleaned by the extractor
+    const cleanContent = article.content;
+
+    // Truncate content to a reasonable length
+    const MAX_LENGTH = 6000;
+    let truncatedContent = cleanContent;
+    if (cleanContent.length > MAX_LENGTH) {
+      truncatedContent = truncateContent(cleanContent, MAX_LENGTH);
+    }
+
+    return {
+      title: article.title,
+      cleanContent,
+      truncatedContent,
+    };
+  } catch (error) {
+    console.error("Both extractors failed:", error);
+    throw new Error(
+      "Could not extract article content from the URL. Please make sure the URL points to a valid article."
+    );
+  }
+}
+
+/**
+ * Helper function to clean HTML content
+ */
+function cleanArticleContent(content: string): string {
+  return content
+    .replace(/<\/p>/gi, "\n\n") // Replace closing paragraph tags with double newlines
+    .replace(/<br\s*\/?>/gi, "\n") // Replace <br> tags with single newlines
+    .replace(/<[^>]*>/g, "") // Remove remaining HTML tags
+    .replace(/\n\s*\n/g, "\n\n") // Normalize multiple newlines to double newlines
+    .replace(/\s+/g, " ") // Replace multiple spaces with single space
+    .split("\n\n") // Split into paragraphs
+    .map((para: string) => para.trim()) // Trim each paragraph
+    .filter((para: string) => para.length) // Remove empty paragraphs
+    .join("\n\n") // Join paragraphs with double newlines
+    .trim(); // Final trim
+}
+
+/**
+ * Helper function to truncate content at paragraph or word boundaries
+ */
+function truncateContent(content: string, maxLength: number): string {
+  let truncated = content.substr(0, maxLength);
+  const lastParaBreak = truncated.lastIndexOf("\n\n");
+
+  if (lastParaBreak > maxLength * 0.8) {
+    // Only cut at paragraph if it's not too short
+    truncated = truncated.substr(0, lastParaBreak);
+  } else {
+    // Otherwise cut at the last word
+    truncated = truncated.substr(
+      0,
+      Math.min(truncated.length, truncated.lastIndexOf(" "))
+    );
+  }
+
+  return truncated + "...";
+}
 
 export function registerRoutes(app: Express): Server {
   // Add a simple test route
@@ -14,56 +136,30 @@ export function registerRoutes(app: Express): Server {
 
   app.post("/api/summarize", async (req, res) => {
     try {
+      // Log when we receive a summarize request for debugging
+      console.log(`Received summarize request from ${req.ip}`);
+
+      // Validate the request data
       const validatedData = summaryRequestSchema.parse(req.body);
 
       if (!validatedData.url) {
         throw new Error("URL is required");
       }
 
-      // Extract article content from URL
-      const article = await extract(validatedData.url);
-      if (!article || !article.content) {
-        throw new Error("Could not extract article content from the URL");
-      }
+      // Extract and process article content
+      const { title, cleanContent, truncatedContent } =
+        await extractArticleContent(validatedData.url);
 
-      // Create a temporary DOM element to parse HTML and get text content
-      const cleanContent = article.content
-        .replace(/<\/p>/gi, "\n\n") // Replace closing paragraph tags with double newlines
-        .replace(/<br\s*\/?>/gi, "\n") // Replace <br> tags with single newlines
-        .replace(/<[^>]*>/g, "") // Remove remaining HTML tags
-        .replace(/\n\s*\n/g, "\n\n") // Normalize multiple newlines to double newlines
-        .replace(/\s+/g, " ") // Replace multiple spaces with single space
-        .split("\n\n") // Split into paragraphs
-        .map((para: string) => para.trim()) // Trim each paragraph
-        .filter((para: string) => para.length) // Remove empty paragraphs
-        .join("\n\n") // Join paragraphs with double newlines
-        .trim(); // Final trim
-
-      // Get approximately 1000 words (around 6000 characters)
-      const MAX_LENGTH = 6000;
-      let truncatedContent = cleanContent;
-      if (cleanContent.length > MAX_LENGTH) {
-        // Find the last complete paragraph within the limit
-        truncatedContent = cleanContent.substr(0, MAX_LENGTH);
-        const lastParaBreak = truncatedContent.lastIndexOf("\n\n");
-        if (lastParaBreak > MAX_LENGTH * 0.8) {
-          // Only cut at paragraph if it's not too short
-          truncatedContent = truncatedContent.substr(0, lastParaBreak);
-        } else {
-          // Otherwise cut at the last word
-          truncatedContent = truncatedContent.substr(
-            0,
-            Math.min(truncatedContent.length, truncatedContent.lastIndexOf(" "))
-          );
-        }
-        truncatedContent += "...";
-      }
+      // Prepare content with article metadata
+      const contentWithMetadata = `Title: ${title}\n\n${truncatedContent}`;
 
       // Generate AI summary
+      console.log("Generating AI summary...");
       const aiSummary = await generateSummary(
-        truncatedContent,
+        contentWithMetadata,
         validatedData.instructions
       );
+      console.log("AI summary generated successfully");
 
       const result = await storage.createSummary({
         content: cleanContent,
@@ -72,8 +168,10 @@ export function registerRoutes(app: Express): Server {
         summary: aiSummary,
       });
 
+      console.log("Summary created and saved to database");
       res.json(result);
     } catch (error: unknown) {
+      console.error("Error in /api/summarize route:", error);
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ message });
     }
@@ -92,86 +190,17 @@ export function registerRoutes(app: Express): Server {
         throw new Error("Question is required");
       }
 
-      console.log("Extracting article from URL:", validatedData.url);
+      // Extract and process article content
+      const { title, cleanContent, truncatedContent } =
+        await extractArticleContent(validatedData.url);
 
-      // Validate URL format
-      let url;
-      try {
-        url = new URL(validatedData.url);
-        // Normalize the URL to ensure consistent format
-        validatedData.url = url.toString();
-      } catch (error) {
-        throw new Error("Invalid URL format");
-      }
-
-      // Extract article content from URL
-      let article;
-      try {
-        article = await extract(validatedData.url);
-        console.log(
-          "Article extraction result:",
-          article ? "Success" : "Failed"
-        );
-
-        if (article) {
-          console.log("Article title:", article.title);
-          console.log("Article author:", article.author || "Unknown");
-          console.log(
-            "Content length:",
-            article.content ? article.content.length : 0
-          );
-        } else {
-          console.log("No article data returned");
-        }
-      } catch (error: unknown) {
-        console.error("Error extracting article:", error);
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        throw new Error(
-          `Could not extract article content from the URL: ${errorMessage}`
-        );
-      }
-
-      if (!article || !article.content) {
-        throw new Error(
-          "Could not extract article content from the URL. Please make sure the URL points to a valid article."
-        );
-      }
-
-      // Clean the content
-      const cleanContent = article.content
-        .replace(/<\/p>/gi, "\n\n")
-        .replace(/<br\s*\/?>/gi, "\n")
-        .replace(/<[^>]*>/g, "")
-        .replace(/\n\s*\n/g, "\n\n")
-        .replace(/\s+/g, " ")
-        .split("\n\n")
-        .map((para: string) => para.trim())
-        .filter((para: string) => para.length)
-        .join("\n\n")
-        .trim();
-
-      // Get approximately 1000 words (around 6000 characters)
-      const MAX_LENGTH = 6000;
-      let truncatedContent = cleanContent;
-      if (cleanContent.length > MAX_LENGTH) {
-        truncatedContent = cleanContent.substr(0, MAX_LENGTH);
-        const lastParaBreak = truncatedContent.lastIndexOf("\n\n");
-        if (lastParaBreak > MAX_LENGTH * 0.8) {
-          truncatedContent = truncatedContent.substr(0, lastParaBreak);
-        } else {
-          truncatedContent = truncatedContent.substr(
-            0,
-            Math.min(truncatedContent.length, truncatedContent.lastIndexOf(" "))
-          );
-        }
-        truncatedContent += "...";
-      }
+      // Prepare content with article metadata
+      const contentWithMetadata = `Title: ${title}\n\n${truncatedContent}`;
 
       // Generate AI answer to the question
       console.log("Generating AI answer to question:", validatedData.question);
       const aiAnswer = await answerQuestion(
-        truncatedContent,
+        contentWithMetadata,
         validatedData.question
       );
       console.log("AI answer generated successfully");

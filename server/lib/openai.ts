@@ -2,9 +2,85 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import OpenAI from "openai";
+import crypto from "crypto";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Simple in-memory cache with expiration
+interface CacheEntry {
+  data: string;
+  expiry: number;
+}
+
+class Cache {
+  private cache: Record<string, CacheEntry> = {};
+  private readonly DEFAULT_TTL = 3600000; // 1 hour in milliseconds
+
+  /**
+   * Generate a hash key for the cache based on input parameters
+   */
+  generateKey(data: string): string {
+    return crypto.createHash("md5").update(data).digest("hex");
+  }
+
+  /**
+   * Get an item from the cache
+   */
+  get(key: string): string | null {
+    const entry = this.cache[key];
+
+    // If entry doesn't exist or has expired, return null
+    if (!entry || entry.expiry < Date.now()) {
+      if (entry) {
+        // Clean up expired entries
+        delete this.cache[key];
+      }
+      return null;
+    }
+
+    return entry.data;
+  }
+
+  /**
+   * Set an item in the cache with optional TTL
+   */
+  set(key: string, data: string, ttl = this.DEFAULT_TTL): void {
+    this.cache[key] = {
+      data,
+      expiry: Date.now() + ttl,
+    };
+  }
+
+  /**
+   * Clear all items from the cache
+   */
+  clear(): void {
+    this.cache = {};
+  }
+
+  /**
+   * Remove expired entries from the cache
+   */
+  cleanup(): void {
+    const now = Date.now();
+    Object.keys(this.cache).forEach((key) => {
+      if (this.cache[key].expiry < now) {
+        delete this.cache[key];
+      }
+    });
+  }
+}
+
+// Initialize cache
+const summaryCache = new Cache();
+const questionCache = new Cache();
+
+// Run cache cleanup periodically (every hour)
+setInterval(() => {
+  summaryCache.cleanup();
+  questionCache.cleanup();
+}, 3600000);
 
 export async function generateSummary(
   content: string,
@@ -14,6 +90,16 @@ export async function generateSummary(
     throw new Error(
       "OpenAI API key is not configured. Please check your environment variables."
     );
+  }
+
+  // Create a unique cache key based on content and instructions
+  const cacheKey = summaryCache.generateKey(content + (instructions || ""));
+
+  // Check if we have a cached response
+  const cachedResponse = summaryCache.get(cacheKey);
+  if (cachedResponse) {
+    console.log("Using cached summary response");
+    return cachedResponse;
   }
 
   const prompt = `Please analyze the following article${
@@ -73,7 +159,7 @@ Focus on:
 - Areas requiring further exploration
 
 ## KEY QUOTES
-Select 2-3 significant quotes that:
+Select 3-5 significant quotes that:
 - Capture central arguments
 - Present unique insights
 - Support major points
@@ -98,12 +184,15 @@ Special Instructions:
       response_format: { type: "text" },
     });
 
-    const content = response.choices[0].message.content;
-    if (!content) {
+    const responseContent = response.choices[0].message.content;
+    if (!responseContent) {
       throw new Error("No summary generated");
     }
 
-    return content;
+    // Cache the response
+    summaryCache.set(cacheKey, responseContent);
+
+    return responseContent;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error("Failed to generate summary: " + errorMessage);
@@ -118,6 +207,16 @@ export async function answerQuestion(
     throw new Error(
       "OpenAI API key is not configured. Please check your environment variables."
     );
+  }
+
+  // Create a unique cache key based on content and question
+  const cacheKey = questionCache.generateKey(content + question);
+
+  // Check if we have a cached response
+  const cachedResponse = questionCache.get(cacheKey);
+  if (cachedResponse) {
+    console.log("Using cached question response");
+    return cachedResponse;
   }
 
   const prompt = `I have the following article content:
@@ -151,12 +250,15 @@ Your goal is to help the user understand the article better by answering their s
       response_format: { type: "text" },
     });
 
-    const content = response.choices[0].message.content;
-    if (!content) {
+    const responseContent = response.choices[0].message.content;
+    if (!responseContent) {
       throw new Error("No answer generated");
     }
 
-    return content;
+    // Cache the response
+    questionCache.set(cacheKey, responseContent);
+
+    return responseContent;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error("Failed to generate answer: " + errorMessage);
