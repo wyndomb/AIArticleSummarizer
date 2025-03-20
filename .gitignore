@@ -6,3 +6,16 @@ vite.config.ts.*
 *.tar.gz
 .env.fixed
 test-*.js
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.vscode
+.idea
+*.swp
+*.swo
+client/.env
